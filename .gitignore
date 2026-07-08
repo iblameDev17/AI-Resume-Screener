@@ -1,0 +1,51 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Logs / crash dumps
+*.log
+hs_err_pid*
+replay_pid*
+
+# Java / Maven / Spring
+**/target/
+**/build/
+**/.mvn/wrapper/maven-wrapper.jar
+
+# Keep nested source build folders if ever intentionally created
+!**/src/main/**/target/
+!**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Java IDE files
+**/.apt_generated
+**/.classpath
+**/.factorypath
+**/.project
+**/.settings/
+**/.springBeans
+**/.sts4-cache/
+**/*.iws
+**/*.iml
+**/*.ipr
+
+# Node / frontend
+**/node_modules/
+**/dist/
+**/.next/
+**/.nuxt/
+**/.svelte-kit/
+**/coverage/
+
+# Python / misc tooling
+**/.venv/
+**/__pycache__/
+**/*.pyc
