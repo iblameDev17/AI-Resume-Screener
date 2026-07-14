@@ -9,6 +9,7 @@ import Register from './pages/Register'
 import OAuthCallback from './pages/OAuthCallback'
 import Dashboard from './pages/Dashboard'
 import Jobs from './pages/Jobs'
+import JobDetail from './pages/JobDetail'
 import Chat from './pages/Chat'
 import NotFound from './pages/NotFound'
 
@@ -24,6 +25,7 @@ function AppRoutes({ backendWarning }) {
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/jobs" element={<Jobs />} />
+          <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/chat" element={<Chat />} />
         </Route>
 

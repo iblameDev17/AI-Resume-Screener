@@ -1,3 +1,5 @@
+import tailwindcssAnimate from 'tailwindcss-animate'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ['class'],
@@ -62,19 +64,19 @@ export default {
       },
       keyframes: {
         'gradient-shift': {
-          '0%':   { backgroundPosition: '0% 50%' },
-          '50%':  { backgroundPosition: '100% 50%' },
+          '0%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
           '100%': { backgroundPosition: '0% 50%' },
         },
         marquee: {
-          '0%':   { transform: 'translateX(0)' },
+          '0%': { transform: 'translateX(0)' },
           '100%': { transform: 'translateX(-50%)' },
         },
         'line-reveal': {
           to: { clipPath: 'inset(0 0 0 0)' },
         },
         'char-in': {
-          '0%':   { opacity: '0', transform: 'translateY(60%)' },
+          '0%': { opacity: '0', transform: 'translateY(60%)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
       },
@@ -86,5 +88,5 @@ export default {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [tailwindcssAnimate],
 }

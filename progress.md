@@ -1,6 +1,6 @@
 # AI Resume Screener - Progress Log
 
-_Last updated: July 10, 2026. Current state: Module 1 and Module 2 complete._
+_Last updated: July 15, 2026. Current state: Module 1, Module 2, and Module 3 complete._
 
 ## Module 1 - Project Setup + Auth Backend
 
@@ -111,3 +111,79 @@ _Last updated: July 10, 2026. Current state: Module 1 and Module 2 complete._
 - Reusable dashboard/layout shell ready.
 - `/jobs` route exists and is ready for Job Description Management.
 - Backend health splash screen ready.
+
+## Module 3 - Job Description Management
+
+### Completed
+- Backend job module created under `backend/src/main/java/com/dev/resume_screener/job/`:
+- `Job.java`
+- `JobRepository.java`
+- `JobRequest.java`
+- `JobResponse.java`
+- `JobService.java`
+- `JobController.java`
+- Backend tests added for Module 3:
+- `backend/src/test/java/com/dev/resume_screener/job/JobRequestValidationTest.java`
+- `backend/src/test/java/com/dev/resume_screener/job/JobServiceTest.java`
+- `backend/src/test/java/com/dev/resume_screener/job/JobControllerTest.java`
+- Frontend files created or updated for the job management flow:
+- `frontend/src/api/jobs.js`
+- `frontend/src/lib/jobs.js`
+- `frontend/src/components/jobs/RequiredSkillsInput.jsx`
+- `frontend/src/components/jobs/JobForm.jsx`
+- `frontend/src/components/jobs/JobCard.jsx`
+- `frontend/src/components/jobs/JobList.jsx`
+- `frontend/src/components/jobs/DeleteJobDialog.jsx`
+- `frontend/src/pages/Jobs.jsx`
+- `frontend/src/pages/JobDetail.jsx`
+- `frontend/src/pages/Dashboard.jsx`
+- `frontend/src/App.jsx`
+- `frontend/tailwind.config.js`
+- The `Job` entity fields are:
+- `id`
+- `title`
+- `description`
+- `requiredSkills`
+- `createdBy`
+- `createdAt`
+- `Job.createdBy` is a `ManyToOne` relationship to `User` using the `created_by` foreign key.
+- API endpoints implemented:
+- `GET /api/jobs`
+- `POST /api/jobs`
+- `GET /api/jobs/{id}`
+- `DELETE /api/jobs/{id}`
+- All job endpoints require JWT authentication.
+- Recruiters can only access their own jobs because all single-job reads/deletes resolve by both `id` and the current authenticated `User`.
+- The frontend jobs page now includes loading, error, empty, list, create-job, and delete-confirmation states.
+- The frontend job detail page now shows job metadata, required skill chips, full job description, and a Module 4 upload placeholder area/button.
+- Dashboard integration now links the recruiter into live job data and recent jobs.
+- Sidebar routing remains compatible for `/`, `/jobs`, `/jobs/:id`, and `/chat`.
+- `/jobs/:id` is ready for Module 4 resume upload.
+
+### Key Design Decisions
+- Confirmed from `backend/src/main/java/com/dev/resume_screener/security/JwtAuthFilter.java`: the JWT filter stores a Spring Security `UserDetails` object as the authentication principal. `JobService.getCurrentUser()` reads `UserDetails.getUsername()` first and then loads the matching `User` entity through `UserRepository.findByEmail(...)`.
+- `requiredSkills` is stored as plain `TEXT` / comma-separated text for simplicity and to match the provided database blueprint.
+- The frontend collects required skills with a chip input, joins them to comma-separated text before create requests, and splits that text back into chips/badges when jobs are displayed.
+- The frontend job API client uses the existing Axios instance and existing JWT interceptor at `frontend/src/api/axios.js`, so all job requests reuse the current `Authorization: Bearer <token>` flow automatically.
+- Module 4 was intentionally left as a placeholder on the job detail page: upload UI entry point only, no PDF parsing, no resume ingestion, no scoring, and no chatbot logic yet.
+- No backend files outside the new job module were changed because the existing security, auth, CORS, and global exception handling were already sufficient for protected per-user job CRUD.
+- `spring.jpa.hibernate.ddl-auto` is `update` in `backend/src/main/resources/application.yml`, so Hibernate creates the `jobs` table automatically on startup. During Module 3 verification, the H2-backed test logs confirmed Hibernate emitted `create table jobs (...)` with the expected columns and foreign key.
+
+### Known Issues / Watch-outs
+- Backend must be running with valid Neon/PostgreSQL, JWT, and Google OAuth environment variables for the full application flow.
+- Frontend local development expects `VITE_API_URL=http://localhost:8080`.
+- Because `ddl-auto` is `update`, the `jobs` table should be created automatically anywhere that setting is preserved. If another environment overrides it to `validate` or `none`, the schema must be created before job endpoints will work.
+- Existing CORS expectations are unchanged: local frontend at `http://localhost:5173`, backend at `http://localhost:8080`.
+- Module 3 verification completed with `backend/./mvnw test`, `frontend/npm run lint`, and `frontend/npm run build`.
+- The frontend production build still needs to be run outside the Windows sandbox in this Codex environment because Vite helper process spawning triggers a sandbox `EPERM`; this is environmental and not a code defect.
+- Manual browser testing and long-running `spring-boot:run` / `npm run dev` sessions were not executed in this pass.
+
+### What Module 4 Will Find Ready
+- Job CRUD backend is complete.
+- `/api/jobs` endpoints are protected and working.
+- Jobs are tied to the authenticated recruiter.
+- Frontend `/jobs` page is complete.
+- Frontend `/jobs/:id` job detail page is complete.
+- Job detail page has a placeholder area/button for Resume Upload.
+- Existing Axios JWT interceptor is used for all job API calls.
+- Module 4 can add PDF resume upload directly into the job detail page.
