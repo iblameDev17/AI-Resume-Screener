@@ -1,6 +1,6 @@
 # AI Resume Screener - Progress Log
 
-_Last updated: July 15, 2026. Current state: Module 1, Module 2, and Module 3 complete._
+_Last updated: July 20, 2026. Current state: Module 1, Module 2, Module 3, and Module 4 complete._
 
 ## Module 1 - Project Setup + Auth Backend
 
@@ -187,3 +187,143 @@ _Last updated: July 15, 2026. Current state: Module 1, Module 2, and Module 3 co
 - Job detail page has a placeholder area/button for Resume Upload.
 - Existing Axios JWT interceptor is used for all job API calls.
 - Module 4 can add PDF resume upload directly into the job detail page.
+
+## Module 4 - Resume Upload + PDF Parsing
+
+### Completed
+- Backend dependency and configuration changes:
+- `backend/pom.xml` updated to add Apache PDFBox `3.0.8`.
+- `backend/src/main/resources/application.yml` updated with multipart limits: `max-file-size: 10MB` and `max-request-size: 220MB`.
+- Backend ownership/security support changes:
+- `backend/src/main/java/com/dev/resume_screener/user/CurrentUserService.java` created to centralize authenticated recruiter lookup through `UserRepository.findByEmail(...)` using the current Spring Security principal.
+- `backend/src/main/java/com/dev/resume_screener/job/JobService.java` updated to use `CurrentUserService` and to delete candidate links plus linked resumes before deleting a job so Module 4 data does not leave broken foreign keys.
+- `backend/src/main/java/com/dev/resume_screener/exception/GlobalExceptionHandler.java` updated to return clean JSON errors for resume validation, multipart failures, unsupported media types, and existing auth/job flows without exposing stack traces.
+- Resume module created under `backend/src/main/java/com/dev/resume_screener/resume/`:
+- `Resume.java`: `resumes` entity with fields `id`, `fileName`, `contentType`, `fileSize`, `extractedText`, and `uploadedAt`.
+- `Candidate.java`: `candidates` entity with fields `id`, `job`, `resume`, `candidateName`, `email`, `aiScore`, `matchedSkills`, `missingSkills`, `aiExplanation`, `screenedAt`, and `createdAt`.
+- `ResumeRepository.java`: JPA repository for stored parsed resumes.
+- `CandidateRepository.java`: JPA repository for job-linked candidate rows with `findByJobOrderByCreatedAtDesc(...)` and `deleteAllByJob(...)`.
+- `PDFParserService.java`: parses uploaded PDFs in memory with PDFBox, normalizes whitespace, rejects protected/corrupted/no-text PDFs, and never logs extracted text.
+- `ResumePersistenceService.java`: persists each successful file inside its own `REQUIRES_NEW` transaction so one failed file does not roll back the whole batch.
+- `ResumeService.java`: validates the batch, enforces recruiter ownership, processes each file independently, stores parsed resumes, creates candidate links, and lists uploaded resumes for a job.
+- `ResumeController.java`: exposes protected upload and list endpoints under the existing job route.
+- `ResumeUploadItemResponse.java`, `ResumeUploadResponse.java`, and `JobResumeResponse.java`: DTOs for upload results and job resume listing.
+- `ResumeValidationException.java` and `ResumeParseException.java`: resume-specific controlled failures used for frontend-friendly messages.
+- Resume entity/table details:
+- Table: `resumes`
+- Columns: `id`, `file_name`, `content_type`, `file_size`, `extracted_text`, `uploaded_at`
+- `file_name` is required.
+- `extracted_text` uses `TEXT`.
+- `uploaded_at` is set automatically in `@PrePersist`.
+- Candidate entity/table details:
+- Table: `candidates`
+- Relationships: `Candidate -> Job` via `job_id` and `Candidate -> Resume` via unique `resume_id`.
+- `aiScore`, `matchedSkills`, `missingSkills`, `aiExplanation`, and `screenedAt` remain `null` for Module 4.
+- Uniqueness is enforced by a unique `resume_id` and a unique `(job_id, resume_id)` constraint.
+- Final backend endpoints:
+- `POST /api/jobs/{jobId}/resumes`
+- Multipart field name: `files`
+- `GET /api/jobs/{jobId}/resumes`
+- Resume deletion endpoint was intentionally deferred and not implemented in Module 4.
+- File validation rules implemented in the backend:
+- maximum `20` files per request
+- maximum `10 MB` per file
+- empty files rejected
+- missing filenames rejected
+- file extension must be `.pdf`
+- content type must be compatible with PDF, with empty or `application/octet-stream` tolerated for browser/client variability
+- filename is sanitized before storage and path traversal-style path segments are stripped
+- PDF parsing behavior implemented:
+- parsing uses `Loader.loadPDF(file.getBytes())` so files stay in memory and are not persisted to disk
+- password-protected PDFs return `The PDF is password protected.`
+- corrupted/unreadable PDFs return `The PDF could not be read. Please upload a valid PDF file.`
+- PDFs with no extractable text return `The PDF does not contain extractable text.`
+- obvious whitespace is normalized while preserving readable line breaks
+- Batch partial-success behavior implemented:
+- batch-level validation runs once
+- each file is validated and parsed independently
+- each successful file is stored in its own transaction through `ResumePersistenceService`
+- upload response returns a per-file status row with success or failure instead of aborting the full batch
+- Upload response DTO shape returned by the backend:
+- top-level fields: `jobId`, `totalFiles`, `successfulCount`, `failedCount`, `results`
+- per-file fields: `originalFileName`, `resumeId`, `candidateId`, `status`, `message`
+- Recruiter ownership enforcement:
+- `CurrentUserService` resolves the authenticated recruiter from Spring Security
+- `ResumeService` loads the target job only through `jobRepository.findByIdAndCreatedBy(jobId, currentUser)`
+- list and upload calls both use the owned job lookup, so one recruiter cannot upload to or read another recruiter’s job resumes
+- Backend tests added:
+- `backend/src/test/java/com/dev/resume_screener/resume/PDFParserServiceTest.java`
+- `backend/src/test/java/com/dev/resume_screener/resume/ResumeServiceTest.java`
+- `backend/src/test/java/com/dev/resume_screener/resume/ResumeControllerTest.java`
+- `backend/src/test/java/com/dev/resume_screener/job/JobServiceTest.java` updated for the shared current-user service.
+- Frontend files created:
+- `frontend/src/api/resumes.js`: Axios client for upload/list resume calls using the existing JWT interceptor.
+- `frontend/src/components/resumes/ResumeUploadZone.jsx`: drag-and-drop plus browse upload surface.
+- `frontend/src/components/resumes/SelectedResumeList.jsx`: pre-upload and post-upload selected file list with statuses, retry, clear, and upload actions.
+- `frontend/src/components/resumes/UploadedResumeList.jsx`: uploaded resumes section with loading, error, and empty states.
+- `frontend/src/components/resumes/ResumeStatusBadge.jsx`: consistent resume status badge rendering.
+- Frontend files modified:
+- `frontend/src/pages/JobDetail.jsx`: replaced the placeholder with the live Module 4 recruiter flow while preserving the existing layout, back navigation, job details, and delete-job behavior.
+- Job detail integration details:
+- recruiters can drag and drop or browse multiple PDFs
+- duplicate file selection is prevented using `name + size + lastModified`
+- invalid client-side selections are rejected immediately with recruiter-friendly feedback
+- selected files show filename, size, status, and remove action
+- upload supports retrying only failed files
+- overall progress is shown during the network upload
+- per-file states are shown as `Ready`, `Uploading`, `Processing`, `Uploaded`, or `Failed`
+- uploaded resumes are reloaded after a successful upload and shown with `Ready for screening` or `Screened`
+- extracted resume text is not shown in the UI
+- Screen Candidates placeholder behavior:
+- the button appears in the sidebar card
+- it stays disabled until at least one resume is uploaded
+- it does not call Gemini or any screening endpoint yet
+- helper copy explains that analysis will be available in the next workflow step
+- Commands actually run and results:
+- `backend\mvnw.cmd test` with the default Maven cache initially failed because the sandbox could not write to `C:\Users\Dev\.m2\repository`.
+- `backend\mvnw.cmd '-Dmaven.repo.local=.m2' test` passed after using a workspace-local Maven repository.
+- `backend\mvnw.cmd '-Dmaven.repo.local=.m2' clean test` passed.
+- `frontend\npm run lint` initially failed on `frontend/src/api/resumes.js` because thrown `Error` objects lacked `cause`; after fixing that, `frontend\npm run lint` passed.
+- `frontend\npm run build` failed inside the sandbox with Vite `spawn EPERM` from `vite.config.js` resolution.
+- `frontend\npm run build` passed when rerun unsandboxed outside the sandbox restriction.
+
+### Key Design Decisions
+- PDFs are parsed in memory with `MultipartFile.getBytes()` and PDFBox because resumes contain personal information and this flow does not need filesystem persistence.
+- Raw PDF files are not stored in PostgreSQL; only metadata plus extracted text are stored because Module 4 only needs parsed text and a linked candidate record.
+- Extracted resume text is not returned in `GET /api/jobs/{jobId}/resumes` because the text can be large and may contain sensitive personal data.
+- Filename sanitization removes directory segments, strips unsafe characters, and falls back to `resume.pdf` when the sanitized result would otherwise be blank.
+- Partial batch success is preserved by saving each valid file inside `ResumePersistenceService.saveParsedResume(...)` with `REQUIRES_NEW` transaction propagation.
+- Candidate rows are created immediately for each successfully parsed resume so Module 5 can enrich the existing records instead of recreating linkage later.
+- Authenticated recruiter ownership is checked at the service layer through `CurrentUserService` plus `jobRepository.findByIdAndCreatedBy(...)`, matching the ownership style already used in the job module.
+- Frontend upload progress is intentionally an overall request progress bar only; per-file processing states come from local state plus the final backend response because one multipart batch request does not expose precise independent per-file network progress.
+- The endpoint shape uses `/api/jobs/{jobId}/resumes` because the relationship to the current job detail page is explicit and it avoids inventing a separate upload endpoint style.
+- Changes outside the resume module were intentionally minimal:
+- `JobService` changed only to reuse the new current-user helper and clean up linked resume data on job deletion.
+- `GlobalExceptionHandler` changed only to add safe resume/multipart error responses while preserving the existing JSON error shape.
+- `JobDetail.jsx` changed only to replace the placeholder with the real upload flow while preserving the existing page structure and recruiter-facing design language.
+
+### Known Issues / Watch-outs
+- Password-protected PDFs are rejected with a controlled per-file error and are not parsed.
+- Image-only or scanned PDFs without extractable text are rejected because Module 4 does not include OCR.
+- PDFBox tests emit a warning in this environment because the process cannot write `C:\Users\Dev\.pdfbox.cache`; parsing still worked and both backend test commands passed.
+- Frontend production build inside the sandbox still triggers a Windows `spawn EPERM`; the unsandboxed retry succeeded, so this is an environment limitation rather than an application code failure.
+- Unauthenticated protected requests currently redirect to login with HTTP `302` in controller tests rather than returning a JSON `401`, which matches the current security behavior and test expectations in this environment.
+- Resume deletion was deferred in Module 4 and no delete button is shown for uploaded resumes.
+- Manual browser-based end-to-end testing was not executed in this pass; verification here is command-based plus test-based.
+
+### What Module 5 Will Find Ready
+- Authenticated recruiters can upload multiple PDF resumes to a specific job.
+- Resume PDFs are validated and parsed with PDFBox.
+- Extracted resume text is stored in the `resumes` table.
+- Candidate rows are created and linked to both `Job` and `Resume`.
+- `aiScore`, `matchedSkills`, `missingSkills`, `aiExplanation`, and `screenedAt` are intentionally still `null`.
+- Job detail now displays uploaded resumes and exposes the `Screen Candidates` action placeholder.
+- Module 5 should reuse:
+- `backend/src/main/java/com/dev/resume_screener/resume/ResumeService.java`
+- `backend/src/main/java/com/dev/resume_screener/resume/PDFParserService.java`
+- `backend/src/main/java/com/dev/resume_screener/resume/CandidateRepository.java`
+- `backend/src/main/java/com/dev/resume_screener/resume/ResumeRepository.java`
+- `POST /api/jobs/{jobId}/resumes`
+- `GET /api/jobs/{jobId}/resumes`
+- Gemini screening input should come from `Resume.extractedText` and job context from the existing `Job` entity fields (`title`, `description`, `requiredSkills`).
+- Module 5 should preserve the current per-file batch behavior because recruiters can upload mixed-quality files in one request and successful uploads already persist independently.

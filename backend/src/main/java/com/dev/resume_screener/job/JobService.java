@@ -3,12 +3,12 @@ package com.dev.resume_screener.job;
 import java.util.Arrays;
 import java.util.List;
 
+import com.dev.resume_screener.resume.CandidateRepository;
+import com.dev.resume_screener.resume.Resume;
+import com.dev.resume_screener.resume.ResumeRepository;
+import com.dev.resume_screener.user.CurrentUserService;
 import com.dev.resume_screener.user.User;
-import com.dev.resume_screener.user.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,11 +19,13 @@ import org.springframework.util.StringUtils;
 public class JobService {
 
     private final JobRepository jobRepository;
-    private final UserRepository userRepository;
+    private final CurrentUserService currentUserService;
+    private final CandidateRepository candidateRepository;
+    private final ResumeRepository resumeRepository;
 
     @Transactional
     public JobResponse createJob(JobRequest request) {
-        User currentUser = getCurrentUser();
+        User currentUser = currentUserService.getCurrentUser();
 
         Job job = Job.builder()
                 .title(request.getTitle().trim())
@@ -37,7 +39,7 @@ public class JobService {
 
     @Transactional(readOnly = true)
     public List<JobResponse> getMyJobs() {
-        return jobRepository.findByCreatedByOrderByCreatedAtDesc(getCurrentUser())
+        return jobRepository.findByCreatedByOrderByCreatedAtDesc(currentUserService.getCurrentUser())
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -45,7 +47,7 @@ public class JobService {
 
     @Transactional(readOnly = true)
     public JobResponse getJobById(Long id) {
-        User currentUser = getCurrentUser();
+        User currentUser = currentUserService.getCurrentUser();
         Job job = jobRepository.findByIdAndCreatedBy(id, currentUser)
                 .orElseThrow(() -> new UsernameNotFoundException("Job not found."));
         return toResponse(job);
@@ -53,33 +55,20 @@ public class JobService {
 
     @Transactional
     public void deleteJob(Long id) {
-        User currentUser = getCurrentUser();
+        User currentUser = currentUserService.getCurrentUser();
         Job job = jobRepository.findByIdAndCreatedBy(id, currentUser)
                 .orElseThrow(() -> new UsernameNotFoundException("Job not found."));
+
+        List<Resume> resumes = candidateRepository.findByJobOrderByCreatedAtDesc(job)
+                .stream()
+                .map(candidate -> candidate.getResume())
+                .toList();
+
+        candidateRepository.deleteAllByJob(job);
+        if (!resumes.isEmpty()) {
+            resumeRepository.deleteAll(resumes);
+        }
         jobRepository.delete(job);
-    }
-
-    private User getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getPrincipal() == null) {
-            throw new UsernameNotFoundException("Authenticated user not found.");
-        }
-
-        Object principal = authentication.getPrincipal();
-        String email;
-
-        if (principal instanceof UserDetails userDetails) {
-            email = userDetails.getUsername();
-        } else {
-            email = authentication.getName();
-        }
-
-        if (!StringUtils.hasText(email)) {
-            throw new UsernameNotFoundException("Authenticated user not found.");
-        }
-
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("Authenticated user not found."));
     }
 
     private JobResponse toResponse(Job job) {

@@ -9,17 +9,15 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import com.dev.resume_screener.resume.CandidateRepository;
+import com.dev.resume_screener.resume.ResumeRepository;
+import com.dev.resume_screener.user.CurrentUserService;
 import com.dev.resume_screener.user.User;
-import com.dev.resume_screener.user.UserRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,22 +27,22 @@ class JobServiceTest {
     private JobRepository jobRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private CurrentUserService currentUserService;
+
+    @Mock
+    private CandidateRepository candidateRepository;
+
+    @Mock
+    private ResumeRepository resumeRepository;
 
     @InjectMocks
     private JobService jobService;
 
-    @AfterEach
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
-    }
-
     @Test
     void createJobShouldNormalizeSkillsAndMapResponse() {
         User recruiter = buildRecruiter();
-        authenticateAs(recruiter.getEmail());
 
-        when(userRepository.findByEmail(recruiter.getEmail())).thenReturn(Optional.of(recruiter));
+        when(currentUserService.getCurrentUser()).thenReturn(recruiter);
         when(jobRepository.save(any(Job.class))).thenAnswer(invocation -> {
             Job job = invocation.getArgument(0);
             job.setId(42L);
@@ -69,9 +67,8 @@ class JobServiceTest {
     @Test
     void getJobByIdShouldHideJobsOwnedByOtherUsers() {
         User recruiter = buildRecruiter();
-        authenticateAs(recruiter.getEmail());
 
-        when(userRepository.findByEmail(recruiter.getEmail())).thenReturn(Optional.of(recruiter));
+        when(currentUserService.getCurrentUser()).thenReturn(recruiter);
         when(jobRepository.findByIdAndCreatedBy(99L, recruiter)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> jobService.getJobById(99L))
@@ -82,9 +79,8 @@ class JobServiceTest {
     @Test
     void getMyJobsShouldReturnCurrentUsersJobsOnly() {
         User recruiter = buildRecruiter();
-        authenticateAs(recruiter.getEmail());
 
-        when(userRepository.findByEmail(recruiter.getEmail())).thenReturn(Optional.of(recruiter));
+        when(currentUserService.getCurrentUser()).thenReturn(recruiter);
         when(jobRepository.findByCreatedByOrderByCreatedAtDesc(recruiter)).thenReturn(List.of(
                 Job.builder()
                         .id(7L)
@@ -99,17 +95,6 @@ class JobServiceTest {
 
         assertThat(jobs).hasSize(1);
         assertThat(jobs.get(0).getRequiredSkillsList()).containsExactly("Figma", "UX Research");
-    }
-
-    private void authenticateAs(String email) {
-        UserDetails principal = org.springframework.security.core.userdetails.User.builder()
-                .username(email)
-                .password("secret")
-                .authorities(List.of())
-                .build();
-
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
     }
 
     private User buildRecruiter() {
